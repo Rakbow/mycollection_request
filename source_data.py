@@ -24,5 +24,8 @@ class Entry:
 
 class ItemImage:
     def __init__(self, imgType: int, url: str):
+        # 0-thumb 100-main
+        # 1-figures 2-various 3-bootlegs 4-collections 5-official 6-spaces
+        # 7-chan 8-loots&boxes 10-banners 11- kits&customs 12-items 14-exposition 19-customization
         self.imgType = imgType
         self.url = url

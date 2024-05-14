@@ -32,11 +32,13 @@ def get_item_detail(item_id: int):
     data_fields = soup.find_all('div', class_='data-field')
     item_name = soup.find('div', class_='content-headline').find('h1', class_='title').text
     item_thumb = soup.find('div', class_='content-icon').find('img', class_='thumbnail')['src']
-    main_image = soup.find('div', class_='item-picture').find('div', class_='tbx-pswp').find('a', class_='main').find('img')['src']
+    main_image = \
+        soup.find('div', class_='item-picture').find('div', class_='tbx-pswp').find('a', class_='main').find('img')[
+            'src']
     item = ItemDetail()
     item.name = item_name
-    item.images.append(ItemImage(0, item_thumb))
-    item.images.append(ItemImage(1, main_image))
+    item.images.append(ItemImage(0, handle_my_collection_image_url(item_thumb)))
+    item.images.append(ItemImage(100, handle_my_collection_image_url(main_image)))
     item.images = item.images + get_item_images(item_id)
     for idx, data_field in enumerate(data_fields, start=1):
         data_label_attr = data_field.find('div', class_='data-label')
@@ -115,14 +117,25 @@ def get_item_detail(item_id: int):
 
 def get_item_images(item_id: int):
     images: list[ItemImage] = []
-    item_images_url = 'https://myfigurecollection.net/?_tb=picture&itemId={}'.format(item_id)
-    html_text = tool.get_html_text(item_images_url)
-    soup = BeautifulSoup(html_text, 'html.parser')
-    image_span = soup.find_all('span', class_='picture-icon tbx-tooltip')
-    for idx, span in enumerate(image_span, start=1):
-        tmp_image = span.find('a').find('span', class_='viewport')['style']
-        image: str = re.compile(r"url\((.*?)\)").findall(tmp_image)[0].replace('/thumbnails', '')
-        images.append(ItemImage(2, image))
+    item_images_url = 'https://myfigurecollection.net/?_tb=picture&itemId={}&page={}'
+    first_item_images_url = item_images_url.format(item_id, 1)
+    first_html_text = tool.get_html_text(first_item_images_url)
+    soup = BeautifulSoup(first_html_text, 'html.parser')
+    title = soup.title.string
+    total_page = get_total_page_size_by_html_title(title)
+
+    for i in range(1, total_page + 1):
+        if i == 1:
+            html_text = first_html_text
+        else:
+            html_text = tool.get_html_text(item_images_url.format(item_id, i))
+        soup = BeautifulSoup(html_text, 'html.parser')
+        image_span = soup.find_all('span', class_='picture-icon tbx-tooltip')
+        for idx, span in enumerate(image_span, start=1):
+            tmp_span = span.find('a').find('span', class_='viewport')
+            image_url = get_item_image_url(tmp_span['style'])
+            image_type = get_item_image_type(span.find('a')['class'][0])
+            images.append(ItemImage(image_type, handle_my_collection_image_url(image_url)))
     return images
 
 
@@ -134,3 +147,20 @@ def is_ean13(code):
 def contains_digits_spaces_commas(text):
     pattern = re.compile(r'[0-9\s,]')
     return bool(pattern.search(text))
+
+
+def handle_my_collection_image_url(url: str):
+    return url.replace('https://static.myfigurecollection.net', '')
+
+
+def get_item_image_url(input_str: str):
+    return re.compile(r"url\((.*?)\)").findall(input_str)[0].replace('/thumbnails', '')
+
+
+def get_item_image_type(input_str: str):
+    return re.search(r'picture-category-(\d+)', input_str).group(1)
+
+
+def get_total_page_size_by_html_title(title: str):
+    match = re.search(r'Page \d+ of (\d+)', title)
+    return int(match.group(1))
